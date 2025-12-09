@@ -17,10 +17,51 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
+# CMake includes
+include(FetchContent)
+
 # Global constants
 set(FUSILLI_PLUGIN_NAME fusilli_plugin)
 set(FUSILLI_PLUGIN_ENGINE_ID 1001)
 set(FUSILLI_PLUGIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/lib/${HIPDNN_PLUGIN_ENGINE_SUBDIR}")
+# Global flag required for hip package, indicates that hip should target AMD
+# platform.
+set(HIP_PLATFORM "amd")
+
+# IREE Runtime Dependency - build from source, same pattern as fusilli/CMakeLists.txt
+if(NOT IREE_SOURCE_DIR)
+  message(FATAL_ERROR "IREE_SOURCE_DIR must be provided. Set -DIREE_SOURCE_DIR=<path> to the IREE source directory.")
+endif()
+message(STATUS "Using existing IREE sources: ${IREE_SOURCE_DIR}")
+# Set IREE build flags
+set(IREE_VISIBILITY_HIDDEN OFF)
+set(IREE_BUILD_COMPILER OFF)
+set(IREE_BUILD_TESTS OFF)
+set(IREE_BUILD_SAMPLES OFF)
+set(IREE_ERROR_ON_MISSING_SUBMODULES OFF)
+set(IREE_HAL_DRIVER_DEFAULTS OFF)
+set(IREE_HAL_DRIVER_HIP ON)
+set(IREE_HIP_TEST_TARGET_CHIP "" CACHE STRING "")
+# Build IREERuntime as part of plugin
+FetchContent_Declare(
+  IREERuntime
+  SOURCE_DIR ${IREE_SOURCE_DIR}
+  # Fusilli's config file requires IREE runtime via
+  # find_dependency(IREERuntime), which triggers find_package(IREERuntime). The
+  # dependency can only be fulfilled via source build: FetchContent_Declare or
+  # add_subdirectory. Of those options, only FetchContent_Declare provides a way
+  # of intercepting the find_package call and redirecting to the source build.
+  OVERRIDE_FIND_PACKAGE
+  SYSTEM
+)
+FetchContent_MakeAvailable(IREERuntime)
+
+# Other dependencies
+find_package(hip CONFIG REQUIRED)
+find_package(hipdnn_sdk CONFIG REQUIRED)
+find_package(hipdnn_frontend CONFIG REQUIRED)
+find_package(Fusilli CONFIG REQUIRED)
+find_package(GTest CONFIG REQUIRED)
 
 # Useful compile warnings
 list(PREPEND FUSILLI_PLUGIN_WARNING_COMPILE_OPTIONS
@@ -44,15 +85,6 @@ list(PREPEND FUSILLI_PLUGIN_WARNING_COMPILE_OPTIONS
     -Wno-gnu-statement-expression            # Disable gnu error for statement expression, this will need to change on Windows.
     -Wswitch-default                         # Warn if a switch statement does not have a default case
 )
-
-# Dependencies
-set(HIP_PLATFORM "amd")
-find_package(hip CONFIG REQUIRED)
-find_package(IREERuntime CONFIG REQUIRED)
-find_package(hipdnn_sdk CONFIG REQUIRED)
-find_package(hipdnn_frontend CONFIG REQUIRED)
-find_package(Fusilli CONFIG REQUIRED)
-find_package(GTest CONFIG REQUIRED)
 
 # Includes
 include_directories(include)
